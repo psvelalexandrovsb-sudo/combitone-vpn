@@ -1,0 +1,45 @@
+name: Build Windows App
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.0'
+          channel: 'stable'
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Generate Windows scaffold
+        run: flutter create --platforms=windows .
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      - name: Package build
+        shell: pwsh
+        run: |
+          $src = "build\windows\x64\runner\Release"
+          $zip = "combitone-vpn-windows.zip"
+          Compress-Archive -Path "$src\*" -DestinationPath $zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: combitone-vpn-windows
+          path: combitone-vpn-windows.zip
+          retention-days: 30
