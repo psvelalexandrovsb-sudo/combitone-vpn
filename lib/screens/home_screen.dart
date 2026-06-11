@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/vpn_config.dart';
 import '../services/vpn_manager_windows.dart';
 import 'login_screen.dart';
 import 'exclusions_screen.dart';
