@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/vpn_config.dart';
 
-const _authBase = 'https://combitone.com/api';
+const _authBase = 'https://combitone.com:9443/api';
 
 class AuthService {
   static Future<String?> login(String phone, String password) async {

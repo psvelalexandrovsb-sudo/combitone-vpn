@@ -11,7 +11,7 @@ void main() async {
     size: Size(400, 620),
     minimumSize: Size(360, 500),
     center: true,
-    title: 'Combitone VPN',
+    title: 'Combitone',
     backgroundColor: Color(0xFF1B1A17),
   );
   windowManager.waitUntilReadyToShow(windowOptions, () async {
@@ -33,7 +33,7 @@ class CombitoneApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Combitone VPN',
+      title: 'Combitone',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF1B1A17),

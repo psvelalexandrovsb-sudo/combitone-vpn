@@ -49,7 +49,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Combitone VPN'),
+        title: const Text('Combitone'),
         backgroundColor: const Color(0xFF1B1A17),
         actions: [
           IconButton(
@@ -78,7 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
               width: 120, height: 120,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: statusColor.withOpacity(0.1),
+                color: statusColor.withValues(alpha: 0.1),
                 border: Border.all(color: statusColor, width: 3),
               ),
               child: Icon(
