@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/vpn_config.dart';
 import '../services/vpn_manager_windows.dart';
-import 'login_screen.dart';
 import 'exclusions_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -14,24 +13,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final ok = await context.read<VpnManagerWindows>().init();
-      if (!ok && mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const LoginScreen()));
-      }
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
     final mgr = context.watch<VpnManagerWindows>();
-
-    if (mgr.config == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
 
     final statusColor = switch (mgr.status) {
       VpnStatus.connected => const Color(0xFF348E52),
@@ -61,11 +44,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Выйти',
-            onPressed: () async {
-              await mgr.logout();
-              if (mounted) Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (_) => const LoginScreen()));
-            },
+            onPressed: () => mgr.logout(),
           ),
         ],
       ),

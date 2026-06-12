@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 import 'services/vpn_manager_windows.dart';
 import 'screens/home_screen.dart';
+import 'screens/login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,9 +20,12 @@ void main() async {
     await windowManager.focus();
   });
 
+  final mgr = VpnManagerWindows();
+  await mgr.init();
+
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => VpnManagerWindows(),
+    ChangeNotifierProvider.value(
+      value: mgr,
       child: const CombitoneApp(),
     ),
   );
@@ -39,7 +43,23 @@ class CombitoneApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF1B1A17),
         colorScheme: const ColorScheme.dark(primary: Color(0xFF348E52)),
       ),
-      home: const HomeScreen(),
+      home: const AuthGate(),
     );
+  }
+}
+
+/// Показывает LoginScreen или HomeScreen в зависимости от состояния авторизации.
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final mgr = context.watch<VpnManagerWindows>();
+    if (mgr.isInitializing) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    return mgr.isAuthenticated ? const HomeScreen() : const LoginScreen();
   }
 }
