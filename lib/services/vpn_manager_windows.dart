@@ -151,6 +151,10 @@ class VpnManagerWindows extends ChangeNotifier {
           'address': ['172.19.0.1/30'],
           'auto_route': true,
           'strict_route': false,
+          // gvisor — userspace-стек. system-стек на Windows падает с
+          // "listen udp4 :0: bind: lacked sufficient buffer space" → нет трафика.
+          'stack': 'gvisor',
+          'sniff': true,
         }
       ],
       'outbounds': [
