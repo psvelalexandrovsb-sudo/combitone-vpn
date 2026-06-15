@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/vpn_config.dart';
 import 'auth_service.dart';
 import 'singbox_runner.dart';
@@ -14,6 +16,8 @@ class VpnManagerWindows extends ChangeNotifier {
   String? _token;
   List<String> _exclusions = [];
   bool _initializing = true;
+  Timer? _refreshTimer;
+  static const _exclusionsKey = 'app_exclusions';
 
   VpnStatus get status => _status;
   String? get error => _error;
@@ -26,6 +30,8 @@ class VpnManagerWindows extends ChangeNotifier {
 
   Future<void> init() async {
     _initializing = true;
+    final prefs = await SharedPreferences.getInstance();
+    _exclusions = prefs.getStringList(_exclusionsKey) ?? [];
     _token = await AuthService.savedToken();
     if (_token != null) {
       _config = await AuthService.fetchConfig(_token!);
@@ -33,10 +39,31 @@ class VpnManagerWindows extends ChangeNotifier {
         // Токен устарел или сервер недоступен — сбрасываем
         await AuthService.logout();
         _token = null;
+      } else {
+        _startAutoRefresh();
       }
     }
     _initializing = false;
     notifyListeners();
+  }
+
+  /// Авто-обновление списка подключений с сервера каждые 30 минут (как в Android).
+  void _startAutoRefresh() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(const Duration(minutes: 30), (_) async {
+      if (_token == null) return;
+      final fresh = await AuthService.fetchConfig(_token!);
+      if (fresh != null) {
+        _config = fresh;
+        notifyListeners();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<bool> login(String phone, String password) async {
@@ -48,6 +75,7 @@ class VpnManagerWindows extends ChangeNotifier {
       _token = null;
       return false;
     }
+    _startAutoRefresh();
     notifyListeners();
     return true;
   }
@@ -93,15 +121,23 @@ class VpnManagerWindows extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _saveExclusions() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_exclusionsKey, _exclusions);
+  }
+
   void addExclusion(String host) {
-    if (!_exclusions.contains(host)) {
-      _exclusions = [..._exclusions, host];
+    final v = host.trim().toLowerCase();
+    if (v.isNotEmpty && !_exclusions.contains(v)) {
+      _exclusions = [..._exclusions, v];
+      _saveExclusions();
       notifyListeners();
     }
   }
 
   void removeExclusion(String host) {
     _exclusions = _exclusions.where((e) => e != host).toList();
+    _saveExclusions();
     notifyListeners();
   }
 
@@ -128,12 +164,13 @@ class VpnManagerWindows extends ChangeNotifier {
             'ip_cidr': ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.0/8'],
             'outbound': 'direct'
           },
+          // Split-tunnel по приложениям: указанные exe идут мимо VPN (напрямую).
           if (_exclusions.isNotEmpty)
-            {'domain': _exclusions, 'outbound': 'direct'},
+            {'process_name': _exclusions, 'outbound': 'direct'},
         ],
         'final': switch (profile.layer) {
           VpnLayer.reality => 'vless-out',
-          VpnLayer.xhttp => 'xhttp-out',
+          VpnLayer.grpc => 'grpc-out',
           VpnLayer.hysteria2 => 'hy2-out',
         },
       }
@@ -142,14 +179,13 @@ class VpnManagerWindows extends ChangeNotifier {
 
   Map<String, dynamic> _buildOutbound(VpnProfile profile) {
     final p = profile.params;
-    final sniPool = _config?.sniPool ?? [];
-    final sni = sniPool.isNotEmpty ? (sniPool..shuffle()).first : profile.server;
+    final realityMap = (p['reality'] as Map?)?.cast<String, dynamic>() ?? {};
+    final shortIds = (realityMap['shortIds'] as List?)?.cast<String>() ?? [];
+    // SNI — свой у каждого слоя: reality/grpc берут из reality.sni, hysteria2 — из sni.
+    final realitySni = (realityMap['sni'] as String?) ?? profile.server;
 
     switch (profile.layer) {
       case VpnLayer.reality:
-        // API: reality.publicKey (string), reality.shortIds (List)
-        final realityMap = (p['reality'] as Map?)?.cast<String, dynamic>() ?? {};
-        final shortIds = (realityMap['shortIds'] as List?)?.cast<String>() ?? [];
         return {
           'type': 'vless',
           'tag': 'vless-out',
@@ -159,7 +195,7 @@ class VpnManagerWindows extends ChangeNotifier {
           'flow': p['flow'] ?? 'xtls-rprx-vision',
           'tls': {
             'enabled': true,
-            'server_name': sni,
+            'server_name': realitySni,
             'utls': {'enabled': true, 'fingerprint': p['fingerprint'] ?? 'chrome'},
             'reality': {
               'enabled': true,
@@ -169,18 +205,24 @@ class VpnManagerWindows extends ChangeNotifier {
           }
         };
 
-      case VpnLayer.xhttp:
+      case VpnLayer.grpc:
+        // VLESS+REALITY+gRPC: мультиплекс, flow пустой (vision только для TCP).
         return {
           'type': 'vless',
-          'tag': 'xhttp-out',
+          'tag': 'grpc-out',
           'server': profile.server,
           'server_port': profile.port,
           'uuid': p['uuid'] ?? '',
-          'transport': {'type': 'xhttp', 'path': p['path'] ?? '/'},
+          'transport': {'type': 'grpc', 'service_name': p['serviceName'] ?? 'grpc'},
           'tls': {
             'enabled': true,
-            'server_name': sni,
-            'utls': {'enabled': true, 'fingerprint': 'chrome'},
+            'server_name': realitySni,
+            'utls': {'enabled': true, 'fingerprint': p['fingerprint'] ?? 'chrome'},
+            'reality': {
+              'enabled': true,
+              'public_key': realityMap['publicKey'] ?? '',
+              'short_id': shortIds.isNotEmpty ? shortIds.first : '',
+            }
           }
         };
 
@@ -197,7 +239,7 @@ class VpnManagerWindows extends ChangeNotifier {
             'obfs': {'type': obfs, 'password': obfsPwd},
           'tls': {
             'enabled': true,
-            'server_name': sni,
+            'server_name': (p['sni'] as String?) ?? profile.server,
           }
         };
     }

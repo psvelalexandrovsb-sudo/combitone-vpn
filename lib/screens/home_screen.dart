@@ -76,7 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
               onSelectionChanged: (s) => mgr.selectLayer(s.first),
               segments: const [
                 ButtonSegment(value: VpnLayer.reality, label: Text('Reality')),
-                ButtonSegment(value: VpnLayer.xhttp, label: Text('XHTTP')),
+                ButtonSegment(value: VpnLayer.grpc, label: Text('gRPC')),
                 ButtonSegment(value: VpnLayer.hysteria2, label: Text('Hysteria2')),
               ],
             ),

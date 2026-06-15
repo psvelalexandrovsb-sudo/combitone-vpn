@@ -1,4 +1,4 @@
-enum VpnLayer { reality, xhttp, hysteria2 }
+enum VpnLayer { reality, grpc, hysteria2 }
 
 class VpnProfile {
   final VpnLayer layer;
@@ -28,8 +28,8 @@ class VpnConfig {
       switch (p['name'] as String) {
         case 'Layer1-Reality':
           layer = VpnLayer.reality;
-        case 'Layer2-XHTTP':
-          layer = VpnLayer.xhttp;
+        case 'Layer2-gRPC':
+          layer = VpnLayer.grpc;
         default:
           layer = VpnLayer.hysteria2;
       }

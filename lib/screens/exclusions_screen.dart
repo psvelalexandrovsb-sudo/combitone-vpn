@@ -33,7 +33,7 @@ class _ExclusionsScreenState extends State<ExclusionsScreen> {
                 child: TextField(
                   controller: _ctrl,
                   decoration: const InputDecoration(
-                    hintText: 'Домен (напр. yandex.ru)',
+                    hintText: 'Приложение (напр. chrome.exe)',
                     border: OutlineInputBorder(),
                   ),
                   onSubmitted: (_) => _add(),
@@ -49,7 +49,8 @@ class _ExclusionsScreenState extends State<ExclusionsScreen> {
           ),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
-            child: Text('Эти домены будут обходить VPN (прямое подключение)',
+            child: Text('Эти приложения будут обходить VPN (прямое подключение). '
+                'Имя процесса, напр. chrome.exe, Telegram.exe',
               style: TextStyle(color: Colors.grey, fontSize: 12)),
           ),
           const Divider(),
