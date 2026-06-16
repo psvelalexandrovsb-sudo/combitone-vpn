@@ -33,7 +33,7 @@ class _ExclusionsScreenState extends State<ExclusionsScreen> {
                 child: TextField(
                   controller: _ctrl,
                   decoration: const InputDecoration(
-                    hintText: 'Приложение (напр. chrome.exe)',
+                    hintText: 'Имя процесса (напр. msedge.exe)',
                     border: OutlineInputBorder(),
                   ),
                   onSubmitted: (_) => _add(),
@@ -50,7 +50,8 @@ class _ExclusionsScreenState extends State<ExclusionsScreen> {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
             child: Text('Эти приложения будут обходить VPN (прямое подключение). '
-                'Имя процесса, напр. chrome.exe, Telegram.exe',
+                'Точное имя процесса с учётом регистра, напр. msedge.exe (Edge), '
+                'chrome.exe, Telegram.exe',
               style: TextStyle(color: Colors.grey, fontSize: 12)),
           ),
           const Divider(),

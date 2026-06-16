@@ -39,6 +39,32 @@ SingboxRunner.start(config) → sing-box.exe run -c <temp>.json
 Сервер один: `31.15.16.232`. UUID по умолчанию в `vpn_endpoint.dart`; если сервер
 вернёт личный — используется он.
 
+## DNS (критично для заблокированных доменов)
+
+ВСЕ DNS-запросы перехватываются и резолвятся **удалённо через туннель** (Cloudflare
+DoH `https://1.1.1.1/dns-query`, `detour: proxy`):
+
+- В `outbounds` есть `{type: dns, tag: dns-out}`, а первое route-правило —
+  `{protocol: dns, outbound: dns-out}` → весь DNS уходит во внутренний резолвер
+  sing-box, а не «мимо» к провайдеру.
+- Блок `dns.final = remote` резолвит домены сайтов на удалённом DoH.
+- `strategy: ipv4_only` — чтобы AAAA-записи не ломали маршрутизацию.
+
+**Зачем:** без этого браузер спрашивал провайдерский DNS, а ТСПУ травит
+заблокированные домены → `ERR_NAME_NOT_RESOLVED` (svoboda.org и т.п.). Часть сайтов
+открывалась, часть нет — именно из-за DNS-травли. Это был основной баг.
+
+> Способ перехвата (`protocol: dns` → `dns-out`) — для sing-box **1.10.7**
+> (версия закреплена в CI). В 1.12+ его заменили на `action: hijack-dns` — при
+> апгрейде sing-box конфиг надо обновить.
+
+## Исключения (split-tunnel)
+
+Перечисленные процессы идут мимо VPN (route-правило `process_name` → `direct`).
+Имя процесса сопоставляется **с учётом регистра** (`msedge.exe`, `Telegram.exe`),
+поэтому в `addExclusion` имя НЕ приводится к нижнему регистру (дедуп —
+регистронезависимый). Пример: для Edge добавить `msedge.exe`.
+
 ## sing-box config (важные нюансы Windows)
 
 - **TUN stack = `gvisor`** (userspace). System-стек на Windows падает с

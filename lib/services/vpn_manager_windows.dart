@@ -143,8 +143,12 @@ class VpnManagerWindows extends ChangeNotifier {
   }
 
   void addExclusion(String host) {
-    final v = host.trim().toLowerCase();
-    if (v.isNotEmpty && !_exclusions.contains(v)) {
+    // НЕ приводим к нижнему регистру: sing-box на Windows сопоставляет
+    // process_name с учётом регистра (Telegram.exe != telegram.exe).
+    // Дедуп — регистронезависимый, чтобы не плодить дубли.
+    final v = host.trim();
+    final exists = _exclusions.any((e) => e.toLowerCase() == v.toLowerCase());
+    if (v.isNotEmpty && !exists) {
       _exclusions = [..._exclusions, v];
       _saveExclusions();
       notifyListeners();
@@ -164,6 +168,18 @@ class VpnManagerWindows extends ChangeNotifier {
     return {
       // debug — для диагностики; вывод перехватывается в singbox.log.
       'log': {'level': 'debug', 'timestamp': true},
+      // DNS: ВСЕ запросы резолвятся удалённо через туннель (Cloudflare DoH по IP,
+      // detour=proxy). Без этого браузер спрашивал провайдерский DNS, а ТСПУ
+      // травит заблокированные домены → ERR_NAME_NOT_RESOLVED (svoboda.org и т.п.).
+      // ipv4_only — на случай, если у домена есть AAAA, который не маршрутизируется.
+      // Адрес DoH — IP (1.1.1.1), поэтому bootstrap-DNS не нужен.
+      'dns': {
+        'servers': [
+          {'tag': 'remote', 'address': 'https://1.1.1.1/dns-query', 'detour': 'proxy'},
+        ],
+        'final': 'remote',
+        'strategy': 'ipv4_only',
+      },
       'inbounds': [
         {
           'type': 'tun',
@@ -181,9 +197,14 @@ class VpnManagerWindows extends ChangeNotifier {
         _buildOutbound(ep),
         {'type': 'direct', 'tag': 'direct'},
         {'type': 'block', 'tag': 'block'},
+        // dns-out — перехваченные TUN'ом DNS-запросы (UDP 53) уходят сюда,
+        // во внутренний DNS-модуль sing-box, а не «мимо» к провайдеру.
+        {'type': 'dns', 'tag': 'dns-out'},
       ],
       'route': {
         'rules': [
+          // Перехват DNS: любой DNS-трафик → внутренний резолвер (см. блок dns).
+          {'protocol': 'dns', 'outbound': 'dns-out'},
           {
             // server/32 — сам VPN-сервер идёт НАПРЯМУЮ, иначе auto_route
             // заворачивает соединение sing-box к серверу обратно в туннель →

@@ -28,11 +28,32 @@ jobs:
         shell: pwsh
         run: |
           $m = "windows\runner\runner.exe.manifest"
-          (Get-Content $m -Raw) `
-            -replace 'level="asInvoker"', 'level="requireAdministrator"' `
-            | Set-Content $m -Encoding UTF8
-          Write-Host "Manifest patched to requireAdministrator:"
-          Select-String -Path $m -Pattern "requestedExecutionLevel"
+          $c = Get-Content $m -Raw
+          # Шаблон манифеста Flutter НЕ содержит requestedExecutionLevel, поэтому
+          # простой -replace ничего не находил и .exe собирался без прав админа.
+          # Если блок уже есть — меняем уровень, иначе вставляем trustInfo целиком.
+          if ($c -match 'requestedExecutionLevel') {
+            $c = $c -replace 'level="asInvoker"', 'level="requireAdministrator"'
+          } else {
+            $trust = @"
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+</assembly>
+"@
+            $c = $c -replace '</assembly>', $trust
+          }
+          Set-Content $m -Value $c -Encoding UTF8
+          Write-Host "=== runner.exe.manifest after patch ==="
+          Get-Content $m
+          if (-not (Select-String -Path $m -Pattern "requireAdministrator")) {
+            Write-Error "UAC manifest patch FAILED - requireAdministrator missing"
+            exit 1
+          }
 
       - name: Install dependencies
         run: flutter pub get
