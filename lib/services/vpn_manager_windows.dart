@@ -166,8 +166,9 @@ class VpnManagerWindows extends ChangeNotifier {
 
   Map<String, dynamic> _buildSingboxConfig(VpnEndpoint ep) {
     return {
-      // debug — для диагностики; вывод перехватывается в singbox.log.
-      'log': {'level': 'debug', 'timestamp': true},
+      // warn — продакшн-уровень: только ошибки. debug писал каждое соединение и
+      // DNS-запрос → грузил CPU sing-box и раздувал память gvisor (и singbox.log).
+      'log': {'level': 'warn', 'timestamp': true},
       // DNS: ВСЕ запросы резолвятся удалённо через туннель (Cloudflare DoH по IP,
       // detour=proxy). Без этого браузер спрашивал провайдерский DNS, а ТСПУ
       // травит заблокированные домены → ERR_NAME_NOT_RESOLVED (svoboda.org и т.п.).
