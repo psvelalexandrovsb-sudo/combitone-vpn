@@ -46,6 +46,14 @@ jobs:
             Write-Error "UAC manifest patch FAILED - requireAdministrator missing"
             exit 1
           }
+          # Линковщик MSVC по умолчанию вставляет свой UAC-фрагмент (asInvoker),
+          # который конфликтует с requireAdministrator из RT_MANIFEST → mt.exe
+          # падает (LNK1327). /MANIFESTUAC:NO отключает авто-фрагмент, остаётся
+          # только наш манифест.
+          $cmake = "windows\runner\CMakeLists.txt"
+          Add-Content $cmake 'target_link_options(${BINARY_NAME} PRIVATE "/MANIFESTUAC:NO")'
+          Write-Host "=== CMakeLists.txt tail ==="
+          Get-Content $cmake -Tail 3
 
       - name: Install dependencies
         run: flutter pub get
