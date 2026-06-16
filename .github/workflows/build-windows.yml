@@ -31,20 +31,12 @@ jobs:
           $c = Get-Content $m -Raw
           # Шаблон манифеста Flutter НЕ содержит requestedExecutionLevel, поэтому
           # простой -replace ничего не находил и .exe собирался без прав админа.
-          # Если блок уже есть — меняем уровень, иначе вставляем trustInfo целиком.
+          # Если блок уже есть — меняем уровень, иначе вставляем trustInfo (одной
+          # строкой, чтобы не ломать YAML-отступы блок-скаляра).
           if ($c -match 'requestedExecutionLevel') {
             $c = $c -replace 'level="asInvoker"', 'level="requireAdministrator"'
           } else {
-            $trust = @"
-  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
-    <security>
-      <requestedPrivileges>
-        <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
-      </requestedPrivileges>
-    </security>
-  </trustInfo>
-</assembly>
-"@
+            $trust = '<trustInfo xmlns="urn:schemas-microsoft-com:asm.v3"><security><requestedPrivileges><requestedExecutionLevel level="requireAdministrator" uiAccess="false" /></requestedPrivileges></security></trustInfo></assembly>'
             $c = $c -replace '</assembly>', $trust
           }
           Set-Content $m -Value $c -Encoding UTF8
