@@ -24,6 +24,16 @@ jobs:
       - name: Generate Windows scaffold
         run: flutter create --platforms=windows .
 
+      - name: Require administrator (UAC) for VPN tun
+        shell: pwsh
+        run: |
+          $m = "windows\runner\runner.exe.manifest"
+          (Get-Content $m -Raw) `
+            -replace 'level="asInvoker"', 'level="requireAdministrator"' `
+            | Set-Content $m -Encoding UTF8
+          Write-Host "Manifest patched to requireAdministrator:"
+          Select-String -Path $m -Pattern "requestedExecutionLevel"
+
       - name: Install dependencies
         run: flutter pub get
 
