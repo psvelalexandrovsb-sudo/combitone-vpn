@@ -178,6 +178,9 @@ class VpnManagerWindows extends ChangeNotifier {
           if (_exclusions.isNotEmpty)
             {'process_name': _exclusions, 'outbound': 'direct'},
         ],
+        // auto_detect_interface — выход прокси к серверу идёт через физический
+        // интерфейс, а не обратно в TUN. Штатное решение петли auto_route (100% CPU).
+        'auto_detect_interface': true,
         'final': switch (profile.layer) {
           VpnLayer.reality => 'vless-out',
           VpnLayer.grpc => 'grpc-out',
