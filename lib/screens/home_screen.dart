@@ -1,17 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/vpn_config.dart';
+import '../models/vpn_endpoint.dart';
 import '../services/vpn_manager_windows.dart';
 import 'exclusions_screen.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final mgr = context.watch<VpnManagerWindows>();
@@ -26,7 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final statusLabel = switch (mgr.status) {
       VpnStatus.connected => 'Подключено',
       VpnStatus.connecting => 'Подключение...',
-      VpnStatus.error => mgr.error ?? 'Ошибка',
+      VpnStatus.error => 'Ошибка',
       VpnStatus.disconnected => 'Отключено',
     };
 
@@ -35,6 +30,11 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('Combitone'),
         backgroundColor: const Color(0xFF1B1A17),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.article_outlined),
+            tooltip: 'Открыть логи',
+            onPressed: () => mgr.openLogs(),
+          ),
           IconButton(
             icon: const Icon(Icons.list_alt),
             tooltip: 'Исключения',
@@ -52,7 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
             Container(
               width: 120, height: 120,
               decoration: BoxDecoration(
@@ -68,17 +68,43 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 16),
             Text(statusLabel,
               style: TextStyle(fontSize: 18, color: statusColor, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 40),
-            const Text('Протокол', style: TextStyle(color: Colors.grey, fontSize: 13)),
+            if (mgr.status == VpnStatus.error && mgr.error != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                mgr.error!,
+                textAlign: TextAlign.center,
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+              ),
+            ],
+            const SizedBox(height: 32),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Сервер', style: TextStyle(color: Colors.grey, fontSize: 13)),
+            ),
             const SizedBox(height: 8),
-            SegmentedButton<VpnLayer>(
-              selected: {mgr.selectedLayer},
-              onSelectionChanged: (s) => mgr.selectLayer(s.first),
-              segments: const [
-                ButtonSegment(value: VpnLayer.reality, label: Text('Reality')),
-                ButtonSegment(value: VpnLayer.grpc, label: Text('gRPC')),
-                ButtonSegment(value: VpnLayer.hysteria2, label: Text('Hysteria2')),
+            DropdownButtonFormField<String>(
+              value: mgr.selected.id,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              ),
+              items: [
+                for (final e in mgr.endpoints)
+                  DropdownMenuItem(
+                    value: e.id,
+                    child: Text(_epTitle(e)),
+                  ),
               ],
+              onChanged: mgr.isConnected
+                  ? null
+                  : (id) {
+                      if (id == null) return;
+                      final ep = mgr.endpoints.firstWhere((e) => e.id == id);
+                      mgr.selectEndpoint(ep);
+                    },
             ),
             const Spacer(),
             SizedBox(
@@ -106,5 +132,14 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
+  }
+
+  String _epTitle(VpnEndpoint e) {
+    final proto = e.isHysteria2
+        ? 'Hysteria2'
+        : e.isGrpc
+            ? 'REALITY+gRPC'
+            : 'REALITY';
+    return '${e.label}  ·  $proto';
   }
 }

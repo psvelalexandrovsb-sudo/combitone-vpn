@@ -22,6 +22,16 @@ class VpnConfig {
 
   const VpnConfig({required this.profiles, required this.sniPool});
 
+  /// Персональный uuid пользователя из подписки (если сервер его прислал).
+  /// Используется вместе с захардкоженными REALITY-эндпоинтами.
+  String? get uuid {
+    for (final p in profiles) {
+      final u = p.params['uuid'];
+      if (u is String && u.isNotEmpty) return u;
+    }
+    return null;
+  }
+
   factory VpnConfig.fromJson(Map<String, dynamic> json) {
     final profiles = (json['profiles'] as List).map((p) {
       VpnLayer layer;
