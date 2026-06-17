@@ -14,8 +14,10 @@ void main() async {
     center: true,
     title: 'Combitone',
     backgroundColor: Color(0xFF1B1A17),
-    // Прячем нативный заголовок — рисуем свою панель с кнопками (см. _WindowBar).
-    titleBarStyle: TitleBarStyle.hidden,
+    // Нативный заголовок Windows — рабочие свернуть/развернуть/закрыть.
+    // (Кастомная панель с hidden-заголовком на Windows ломала minimize —
+    // серое перекрытие вместо сворачивания.)
+    titleBarStyle: TitleBarStyle.normal,
   );
   windowManager.waitUntilReadyToShow(windowOptions, () async {
     await windowManager.show();
@@ -45,80 +47,7 @@ class CombitoneApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF1B1A17),
         colorScheme: const ColorScheme.dark(primary: Color(0xFF348E52)),
       ),
-      // Своя панель окна сверху на всех экранах (заголовок + кнопки).
-      builder: (context, child) => Column(
-        children: [
-          const _WindowBar(),
-          Expanded(child: child ?? const SizedBox.shrink()),
-        ],
-      ),
       home: const AuthGate(),
-    );
-  }
-}
-
-/// Кастомная верхняя панель окна: перетаскивание + свернуть/развернуть/закрыть.
-class _WindowBar extends StatelessWidget {
-  const _WindowBar();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 36,
-      child: Row(
-        children: [
-          Expanded(
-            child: DragToMoveArea(
-              child: Container(
-                alignment: Alignment.centerLeft,
-                padding: const EdgeInsets.only(left: 12),
-                color: Colors.transparent,
-                child: const Text(
-                  'Combitone',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF9A968C)),
-                ),
-              ),
-            ),
-          ),
-          _WinBtn(icon: Icons.remove, tooltip: 'Свернуть', onTap: () => windowManager.minimize()),
-          _WinBtn(
-            icon: Icons.crop_square,
-            tooltip: 'Развернуть',
-            onTap: () async {
-              if (await windowManager.isMaximized()) {
-                await windowManager.unmaximize();
-              } else {
-                await windowManager.maximize();
-              }
-            },
-          ),
-          _WinBtn(icon: Icons.close, tooltip: 'Закрыть', danger: true, onTap: () => windowManager.close()),
-        ],
-      ),
-    );
-  }
-}
-
-class _WinBtn extends StatelessWidget {
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onTap;
-  final bool danger;
-  const _WinBtn({required this.icon, required this.tooltip, required this.onTap, this.danger = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        onTap: onTap,
-        hoverColor: danger ? const Color(0xFFE0533D) : Colors.white24,
-        child: SizedBox(
-          width: 44,
-          height: 36,
-          child: Icon(icon, size: 15, color: const Color(0xFFCFCABF)),
-        ),
-      ),
     );
   }
 }
