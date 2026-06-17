@@ -206,6 +206,13 @@ class VpnManagerWindows extends ChangeNotifier {
         'rules': [
           // Перехват DNS: любой DNS-трафик → внутренний резолвер (см. блок dns).
           {'protocol': 'dns', 'outbound': 'dns-out'},
+          // Гасим локальный discovery-флуд, который Windows постоянно льёт в TUN
+          // (SSDP/UPnP :1900, WS-Discovery :3702, mDNS :5353, LLMNR :5355,
+          // NetBIOS :137-139) + multicast/broadcast + сама TUN-подсеть.
+          // Без этого gvisor молотил тысячи соединений к 172.19.0.2:1900 →
+          // 50-60% CPU и singbox.log раздувался до десятков МБ.
+          {'ip_cidr': ['224.0.0.0/3', '255.255.255.255/32', '172.19.0.0/30'], 'outbound': 'block'},
+          {'port': [1900, 3702, 5353, 5355, 137, 138, 139], 'outbound': 'block'},
           {
             // server/32 — сам VPN-сервер идёт НАПРЯМУЮ, иначе auto_route
             // заворачивает соединение sing-box к серверу обратно в туннель →

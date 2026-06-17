@@ -39,10 +39,18 @@ class AppLogger {
     print('[combitone] $msg');
   }
 
+  /// Максимальный размер singbox.log — чтобы не рос бесконечно при потоке ошибок.
+  static const int _maxSingboxBytes = 1024 * 1024; // 1 МБ
+
   /// Дозаписать сырой вывод процесса sing-box в singbox.log.
+  /// Без flush (дешевле по CPU) и с обрезкой по достижении лимита.
   static void appendSingbox(String chunk) {
     try {
-      File(singboxLogPath).writeAsStringSync(chunk, mode: FileMode.append, flush: true);
+      final f = File(singboxLogPath);
+      if (f.existsSync() && f.lengthSync() > _maxSingboxBytes) {
+        f.writeAsStringSync('[лог обрезан по лимиту ${_maxSingboxBytes ~/ 1024} КБ]\n');
+      }
+      f.writeAsStringSync(chunk, mode: FileMode.append);
     } catch (_) {}
   }
 
