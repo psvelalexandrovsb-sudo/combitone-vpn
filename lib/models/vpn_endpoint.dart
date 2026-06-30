@@ -18,6 +18,9 @@ class VpnEndpoint {
   final String sni;
 
   // VLESS+REALITY
+  /// Per-endpoint UUID (для публичных серверов из списка).
+  /// Пустая строка → использовать uuid из авторизации.
+  final String uuid;
   final String pubkey;
   final String shortId;
 
@@ -33,9 +36,10 @@ class VpnEndpoint {
     required this.id,
     required this.label,
     this.protocol = 'vless',
-    this.server = '31.15.16.232',
+    this.server = '31.57.108.107',
     required this.port,
     required this.sni,
+    this.uuid = '',
     this.pubkey = '',
     this.shortId = '',
     this.password = '',
@@ -43,6 +47,25 @@ class VpnEndpoint {
     this.network = 'tcp',
     this.serviceName = '',
   });
+
+  /// Парсинг из JSON-объекта сервера (GET /app/config → our[]/public[]).
+  /// Маппинг: proto→protocol, obfs_password→obfsPassword, short_id→shortId.
+  factory VpnEndpoint.fromJson(Map<String, dynamic> json) {
+    final proto = (json['proto'] as String?) ?? 'vless';
+    return VpnEndpoint(
+      id: (json['id'] as String?) ?? '',
+      label: (json['label'] as String?) ?? '',
+      protocol: proto,
+      server: (json['server'] as String?) ?? '',
+      port: (json['port'] as int?) ?? 443,
+      sni: (json['sni'] as String?) ?? '',
+      uuid: (json['uuid'] as String?) ?? '',
+      pubkey: (json['pubkey'] as String?) ?? '',
+      shortId: (json['short_id'] as String?) ?? '',
+      password: (json['password'] as String?) ?? '',
+      obfsPassword: (json['obfs_password'] as String?) ?? '',
+    );
+  }
 
   bool get isHysteria2 => protocol == 'hysteria2';
   bool get isGrpc => network == 'grpc';
@@ -53,7 +76,7 @@ const List<VpnEndpoint> kFallbackEndpoints = [
   // --- Hysteria2 (основной, UDP) ---
   VpnEndpoint(
     id: 'hy2-443', label: 'Combitone (быстрый)', protocol: 'hysteria2',
-    server: '31.15.16.232', port: 443, sni: 'combitone.com',
+    server: '31.57.108.107', port: 443, sni: 'combitone.com',
     password: 'igwOx0HCS2J52CQ8OA9X', obfsPassword: '1wBWXTiq29GSgT7JuvGs',
   ),
   // --- VLESS+REALITY (запасные, TCP) ---

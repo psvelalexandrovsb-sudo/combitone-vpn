@@ -5,6 +5,7 @@ import '../models/vpn_config.dart';
 import '../models/vpn_endpoint.dart';
 import 'auth_service.dart';
 import 'logger.dart';
+import 'server_list_service.dart';
 import 'singbox_runner.dart';
 
 enum VpnStatus { disconnected, connecting, connected, error }
@@ -17,8 +18,13 @@ class VpnManagerWindows extends ChangeNotifier {
   String? _token;
   String _uuid = kDefaultUuid;
 
-  /// Список серверов (как на Android): Hysteria2 + 6 REALITY + gRPC.
-  final List<VpnEndpoint> _endpoints = kFallbackEndpoints;
+  /// «Наши» серверы (секция "our" из /app/config).
+  List<VpnEndpoint> _ourEndpoints = [];
+
+  /// Публичные / резервные серверы (секция "public").
+  List<VpnEndpoint> _publicEndpoints = [];
+
+  /// Текущий выбранный сервер.
   VpnEndpoint _selected = kFallbackEndpoints.first;
 
   List<String> _exclusions = [];
@@ -30,7 +36,16 @@ class VpnManagerWindows extends ChangeNotifier {
   VpnStatus get status => _status;
   String? get error => _error;
   VpnConfig? get config => _config;
-  List<VpnEndpoint> get endpoints => _endpoints;
+
+  /// Все серверы подряд: our → public (для обратной совместимости).
+  List<VpnEndpoint> get endpoints => [..._ourEndpoints, ..._publicEndpoints];
+
+  /// «Наши» серверы для UI (первая секция списка).
+  List<VpnEndpoint> get ourEndpoints => _ourEndpoints;
+
+  /// Публичные серверы для UI (секция «Резервные»).
+  List<VpnEndpoint> get publicEndpoints => _publicEndpoints;
+
   VpnEndpoint get selected => _selected;
   bool get isConnected => _status == VpnStatus.connected;
   bool get isAuthenticated => _config != null;
@@ -41,11 +56,19 @@ class VpnManagerWindows extends ChangeNotifier {
     _initializing = true;
     final prefs = await SharedPreferences.getInstance();
     _exclusions = prefs.getStringList(_exclusionsKey) ?? [];
+
+    // 1. Сначала кэш — список появляется сразу без ожидания сети.
+    final cached = await ServerListService.loadFromCache();
+    _applyServerList(cached);
+
+    // 2. Восстанавливаем сохранённый выбор (после применения кэшированного списка).
     final savedId = prefs.getString(_selectedKey);
     if (savedId != null) {
-      _selected = _endpoints.firstWhere((e) => e.id == savedId,
-          orElse: () => _endpoints.first);
+      final found = endpoints.where((e) => e.id == savedId).firstOrNull;
+      if (found != null) _selected = found;
     }
+
+    // 3. Авторизация.
     _token = await AuthService.savedToken();
     if (_token != null) {
       _config = await AuthService.fetchConfig(_token!);
@@ -57,8 +80,43 @@ class VpnManagerWindows extends ChangeNotifier {
         _startAutoRefresh();
       }
     }
+
     _initializing = false;
-    AppLogger.log('init: авторизован=${_config != null}, сервер=${_selected.id}');
+    AppLogger.log(
+        'init: авт=${_config != null}, сервер=${_selected.id}, '
+        'our=${_ourEndpoints.length}, public=${_publicEndpoints.length}');
+    notifyListeners();
+
+    // 4. Фоновое обновление списка серверов — не блокирует UI.
+    unawaited(_refreshServerList());
+  }
+
+  /// Применить результат загрузки серверов.
+  /// Null / пустой результат → fallback (kFallbackEndpoints как «наши»).
+  void _applyServerList(ServerListResult? result) {
+    if (result == null || result.isEmpty) {
+      _ourEndpoints = List.of(kFallbackEndpoints);
+      _publicEndpoints = [];
+    } else {
+      _ourEndpoints = result.our;
+      _publicEndpoints = result.public;
+    }
+    // Если выбранный сервер пропал из нового списка — выбрать первый доступный.
+    final all = endpoints;
+    if (all.isNotEmpty && !all.any((e) => e.id == _selected.id)) {
+      _selected = all.first;
+    }
+  }
+
+  /// Фоновое обновление списка серверов, не прерывает текущее подключение.
+  Future<void> _refreshServerList() async {
+    final fresh = await ServerListService.fetchAndUpdate();
+    if (fresh == null || fresh.isEmpty) return;
+    final prevId = _selected.id;
+    _applyServerList(fresh);
+    // Сохраняем предыдущий выбор если он есть в новом списке.
+    final found = endpoints.where((e) => e.id == prevId).firstOrNull;
+    if (found != null) _selected = found;
     notifyListeners();
   }
 
@@ -117,16 +175,18 @@ class VpnManagerWindows extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
-    AppLogger.log('connect: сервер=${_selected.id} (${_selected.protocol}:${_selected.port}) uuid=${_uuid.substring(0, 8)}…');
+    AppLogger.log(
+        'connect: сервер=${_selected.id} (${_selected.protocol}:${_selected.port}) '
+        'uuid=${_uuid.substring(0, 8)}…');
     final singboxConfig = _buildSingboxConfig(_selected);
     final res = await _singbox.start(singboxConfig);
     if (res.ok) {
       _status = VpnStatus.connected;
-      AppLogger.log('connect: статус=Подключено');
+      AppLogger.log('connect: Подключено');
     } else {
       _status = VpnStatus.error;
       _error = res.error ?? 'Не удалось подключиться';
-      AppLogger.log('connect: статус=Ошибка — ${res.error}');
+      AppLogger.log('connect: Ошибка — ${res.error}');
     }
     notifyListeners();
   }
@@ -171,9 +231,7 @@ class VpnManagerWindows extends ChangeNotifier {
       'log': {'level': 'warn', 'timestamp': true},
       // DNS: ВСЕ запросы резолвятся удалённо через туннель (Cloudflare DoH по IP,
       // detour=proxy). Без этого браузер спрашивал провайдерский DNS, а ТСПУ
-      // травит заблокированные домены → ERR_NAME_NOT_RESOLVED (svoboda.org и т.п.).
-      // ipv4_only — на случай, если у домена есть AAAA, который не маршрутизируется.
-      // Адрес DoH — IP (1.1.1.1), поэтому bootstrap-DNS не нужен.
+      // травит заблокированные домены → ERR_NAME_NOT_RESOLVED.
       'dns': {
         'servers': [
           {'tag': 'remote', 'address': 'https://1.1.1.1/dns-query', 'detour': 'proxy'},
@@ -204,43 +262,41 @@ class VpnManagerWindows extends ChangeNotifier {
       ],
       'route': {
         'rules': [
-          // Перехват DNS: любой DNS-трафик → внутренний резолвер (см. блок dns).
           {'protocol': 'dns', 'outbound': 'dns-out'},
-          // Гасим локальный discovery-флуд, который Windows постоянно льёт в TUN
-          // (SSDP/UPnP :1900, WS-Discovery :3702, mDNS :5353, LLMNR :5355,
-          // NetBIOS :137-139) + multicast/broadcast + сама TUN-подсеть.
-          // Без этого gvisor молотил тысячи соединений к 172.19.0.2:1900 →
-          // 50-60% CPU и singbox.log раздувался до десятков МБ.
-          {'ip_cidr': ['224.0.0.0/3', '255.255.255.255/32', '172.19.0.0/30'], 'outbound': 'block'},
+          // Гасим локальный discovery-флуд Windows (SSDP/UPnP/mDNS/LLMNR/NetBIOS)
+          // + multicast/broadcast + сама TUN-подсеть.
+          {
+            'ip_cidr': ['224.0.0.0/3', '255.255.255.255/32', '172.19.0.0/30'],
+            'outbound': 'block'
+          },
           {'port': [1900, 3702, 5353, 5355, 137, 138, 139], 'outbound': 'block'},
           {
-            // server/32 — сам VPN-сервер идёт НАПРЯМУЮ, иначе auto_route
-            // заворачивает соединение sing-box к серверу обратно в туннель →
-            // маршрутная петля (100% CPU, нет трафика). Критично для UDP/Hysteria2.
+            // server/32 идёт НАПРЯМУЮ — иначе auto_route создаёт маршрутную петлю.
             'ip_cidr': [
               '${ep.server}/32',
               '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.0/8'
             ],
             'outbound': 'direct'
           },
-          // Split-tunnel по приложениям: указанные exe идут мимо VPN.
+          // Split-tunnel по приложениям.
           if (_exclusions.isNotEmpty)
             {'process_name': _exclusions, 'outbound': 'direct'},
         ],
-        // auto_detect_interface — выход прокси к серверу идёт через физический
-        // интерфейс, а не обратно в TUN. Штатное решение петли auto_route.
+        // auto_detect_interface — выход прокси к серверу через физический интерфейс.
         'auto_detect_interface': true,
         'final': 'proxy',
       }
     };
   }
 
-  /// Outbound — 1:1 с Android (combitone-android/lib/services/singbox_config.dart).
+  /// Outbound — 1:1 с Android.
+  /// uuid: ep.uuid (публичный сервер, задан в списке) или _uuid (из авторизации).
   Map<String, dynamic> _buildOutbound(VpnEndpoint ep) {
     if (ep.isHysteria2) {
       return {
         'type': 'hysteria2',
         'tag': 'proxy',
+        // server = IP (hysteria2 sing-box не резолвит DNS внутри VPN, нужен IP).
         'server': ep.server,
         'server_port': ep.port,
         'password': ep.password,
@@ -253,12 +309,13 @@ class VpnManagerWindows extends ChangeNotifier {
       };
     }
     // VLESS+REALITY (tcp/vision) или +gRPC (мультиплекс).
+    final effectiveUuid = ep.uuid.isNotEmpty ? ep.uuid : _uuid;
     return {
       'type': 'vless',
       'tag': 'proxy',
       'server': ep.server,
       'server_port': ep.port,
-      'uuid': _uuid,
+      'uuid': effectiveUuid,
       // gRPC мультиплексирует один поток — flow xtls-rprx-vision только для TCP.
       if (!ep.isGrpc) 'flow': 'xtls-rprx-vision',
       if (ep.isGrpc)
