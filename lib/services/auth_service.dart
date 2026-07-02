@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/vpn_config.dart';
 
-const _authBase = 'https://combitone.com:9443/api';
+const _authBase = 'https://ex-in.ru:9443/api';
 const _timeout = Duration(seconds: 15);
 
 class AuthService {

@@ -76,7 +76,7 @@ const List<VpnEndpoint> kFallbackEndpoints = [
   // --- Hysteria2 (основной, UDP) ---
   VpnEndpoint(
     id: 'hy2-443', label: 'Combitone (быстрый)', protocol: 'hysteria2',
-    server: '31.57.108.107', port: 443, sni: 'combitone.com',
+    server: '31.57.108.107', port: 443, sni: 'ex-in.ru',
     password: 'igwOx0HCS2J52CQ8OA9X', obfsPassword: '1wBWXTiq29GSgT7JuvGs',
   ),
   // --- VLESS+REALITY (запасные, TCP) ---
